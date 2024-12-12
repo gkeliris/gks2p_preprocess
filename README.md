@@ -1,4 +1,4 @@
-# gks2p
+# gks2p_preprocess
 ---
 This code uses modified suite2p that can be used in modules
 ---
@@ -12,8 +12,8 @@ This code uses modified suite2p that can be used in modules
     > python -m pip install "suite2p[gui] @ git+https://github.com/gkeliris/suite2p.git@gks2p"
 - install scanreader
     > pip3 install git+https://github.com/atlab/scanreader.git    
-- clone the gks2p repository from github    
-    > git clone git@github.com:gkeliris/gks2p.git
+- install the gks2p_preprocess repository from github
+    > python -m pip install git+https://github.com/gkeliris/gks2p_preprocess.git@mecp2
 
 ### In case of problems / optional 
 - optional in case not working
