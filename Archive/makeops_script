@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Jan 21 05:46:27 2024
+
+@author: georgioskeliris
+"""
+from ScanImageTiffReader import ScanImageTiffReader
+import os
+import json
+import numpy as np
+
+#froot='/mnt/Toshiba_16TB_1/1.1 cohort1_hsynG7f_11weeks_raw tiff/M10_PVtd_3mm/RAW/Contrast'
+#firstTiff='Contrast_M110_00001_00001.tif'
+
+froot=ds.rawPath.iloc[0]
+firstTiff=ds.firstTiff.iloc[0]
+
+reader = ScanImageTiffReader(os.path.join(froot, firstTiff))
+tiff_dim=reader.shape()
+h=reader.metadata()
+js=h.find('{\n')
+hh=h[1:js-2].splitlines()
+json_obj=json.loads(h[js:-1])
+
+hhDict={}
+for s in hh:
+    eq_ind = s.find('=')
+    hhDict[s[:eq_ind-1]] = s[eq_ind+2:]
+     
+fsV = float(hhDict['SI.hRoiManager.scanVolumeRate'])
+fsF = float(hhDict['SI.hRoiManager.scanFrameRate'])
+zsstr = hhDict['SI.hStackManager.zs']
+if zsstr[0] == '[':
+    zs = zsstr[1:-1].split(" ")
+else:
+    zs = [zsstr]
+zs=list(set(zs))
+nplanes = len(zs)
+
+si_rois = json_obj['RoiGroups']['imagingRoiGroup']['rois']
+if type(si_rois) is dict:
+    si_rois = [si_rois]
+nrois = len(si_rois)
+rois_zs = [si_rois[f]['zs'] for f in range(nrois)]
+if type(rois_zs[0]) is list:
+    rois_zs = set(sum(rois_zs,[]))
+if hhDict['SI.hChannels.channelsActive']=='[1;2]':
+    nChannels=2;
+else:
+    nChannels=1;
+
+
+
+nroisPerPlane = np.zeros(nplanes)
+whichplane = []
+whichroi = []
+whichscanfield=[]
+for p in range(0, nplanes):
+    for kk in range(0, nrois):
+        if np.any(np.isin(si_rois[kk]['zs'], int(zs[p]))):
+            nroisPerPlane[p] = nroisPerPlane[p]+1
+            whichplane.append(p)
+            whichroi.append(kk)
+            tmp=np.where(np.array(si_rois[kk]['zs'])==int(zs[p]))
+            whichscanfield.append(tmp[0][0])
+
+
+pln = [{'plane':x,'Ly':[], 'Lx':[], 'cY':[], 'cX':[], 'szY':[], 'szX':[]} for x in range(0,nplanes)]
+aspect=[]
+for i in range(0,len(whichplane)):
+    pln[whichplane[i]]['Ly'].append(si_rois[whichroi[i]]['scanfields'][whichscanfield[i]]['pixelResolutionXY'][1])
+    pln[whichplane[i]]['Lx'].append(si_rois[whichroi[i]]['scanfields'][whichscanfield[i]]['pixelResolutionXY'][0])
+    pln[whichplane[i]]['cY'].append(si_rois[whichroi[i]]['scanfields'][whichscanfield[i]]['centerXY'][1])
+    pln[whichplane[i]]['cX'].append(si_rois[whichroi[i]]['scanfields'][whichscanfield[i]]['centerXY'][0])
+    pln[whichplane[i]]['szY'].append(si_rois[whichroi[i]]['scanfields'][whichscanfield[i]]['sizeXY'][1])
+    pln[whichplane[i]]['szX'].append(si_rois[whichroi[i]]['scanfields'][whichscanfield[i]]['sizeXY'][0])
+    
+    mmPerPix_Y=si_rois[whichroi[i]]['scanfields'][whichscanfield[i]]['pixelToRefTransform'][1][1]
+    mmPerPix_X=si_rois[whichroi[i]]['scanfields'][whichscanfield[i]]['pixelToRefTransform'][0][0]
+    aspect.append(np.array(mmPerPix_Y) / np.array(mmPerPix_X)) 
+    
+
+n_rows_sum = np.zeros(nplanes)
+n_flybackP = np.zeros(nplanes)
+for p in range(0,nplanes):
+    n_rows_sum[p] = sum(pln[p]['Ly'])
+    n_flybackP[p] = (tiff_dim[1] - n_rows_sum[p]) / max(1, (nroisPerPlane[p] - 1))
+
+# deduce flyback from most filled z-plane    
+n_flyback = np.min(n_flybackP)
+
+muX=[]; muY=[]; iminX=[]; iminY=[]; irow1=[]; irow2=[]
+for p in range(0,nplanes):
+    pln[p]['cX'] = np.array(pln[p]['cX']) - np.array(pln[p]['szX'])/2
+    pln[p]['cX'] = pln[p]['cX'] - np.min(pln[p]['cX']) 
+    pln[p]['cY'] = np.array(pln[p]['cY']) - np.array(pln[p]['szY'])/2
+    pln[p]['cY'] = pln[p]['cY'] - np.min(pln[p]['cY'])    
+    for r in range(0,int(nroisPerPlane[p])):
+            
+        muX = np.array(pln[p]['Lx'][r])/np.array(pln[p]['szX'][r])
+        muY = np.array(pln[p]['Ly'][r])/np.array(pln[p]['szY'][r])
+        iminX.append(pln[p]['cX'][r] * muX)
+        iminY.append(pln[p]['cY'][r] * muY)
+    
+    irow_tmp = np.delete(np.insert(np.cumsum(np.array(pln[p]['Ly']) + n_flyback), 0, 0),-1,0)
+    irow_tmp2=irow_tmp + np.array(pln[p]['Ly'])
+    irow1.append(list(irow_tmp))
+    irow2.append(list(irow_tmp2))
+
+irow1=[item for row in irow1 for item in row]
+irow2=[item for row in irow2 for item in row]
+
+diameter=[]
+for a in range(0,len(aspect)):
+    diameter.append(10)
+    diameter.append(round(10*aspect[a]))
+
+ops={}
+if nplanes == 1:
+    ops['fs'] = fsF
+else:
+    ops['fs'] = fsV
+
+ops['nchannels'] = int(nChannels)
+ops['nplanes'] = nplanes
+ops['nrois'] = nrois
+if nrois*nplanes == 1:
+    ops['mesoscan'] = 0
+else:
+    ops['mesoscan'] = 1
+ops['diameter']=diameter[:2]
+ops['diameters']=diameter
+ops['num_workers_roi'] = 5
+ops['keep_movie_raw'] = 1
+ops['delete_bin'] = 0
+ops['batch_size'] = 500
+ops['nimg_init'] = 300
+ops['tau'] = 1.5
+ops['combined'] = 1
+ops['nonrigid'] = 1
+ops['save_mat'] = 0
+ops['anatomical_only'] = 0 
+ops['cellprob_threshold'] = 0.5
+ops['aspect'] = 1.0
+ops['aspects'] = aspect
+if ops['mesoscan']:
+    ops['dx']=[]; ops['dy']=[]; ops['lines']=[]
+    for i in range(0,len(aspect)):
+        ops['dx'].append(int(iminX[i]))
+        ops['dy'].append(int(iminY[i]))
+        ops['lines'].append([x for x in range(int(irow1[i]),int(irow2[i]))])
+        
+ 
+
