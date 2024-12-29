@@ -1,6 +1,5 @@
-from gks2p.datasets import *
-from gks2p.preprocess import *
-from gks2p.mkops_general import mkops_general
+from gks2p import *
+
 
 # basepath = '/home/georgioskeliris/Desktop/gkel@NAS/MECP2TUN/'
 # basepath = '/mnt/sdd/MECP2TUN'
