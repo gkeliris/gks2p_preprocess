@@ -248,6 +248,8 @@ def gks2p_segment(ds, basepath, pipeline='orig', iplaneList=None):
             opsPlane = {**opsPlane, **ops}
             Ly=opsPlane['Ly']
             Lx=opsPlane['Lx']
+            print(Ly)
+            print(Lx)
 
             # Use default classification file provided by suite2p 
             classfile = suite2p.classification.builtin_classfile

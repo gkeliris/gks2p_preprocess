@@ -14,6 +14,8 @@ ds = getOneSesPath('coh1', 'w11', 'M10', 'ses1', 'OO')
 '''
        
 ds = datasetQuery(cohort='coh1', week='w11', mouseID='M10', ses='ses1', experiment='DR') 
+ds = datasetQuery(cohort='coh1', week='w11', mouseID='M10', ses='ses1', experiment='OR2') 
+ds = datasetQuery(cohort='coh1', week='w11', mouseID='M10', ses='ses1', experiment='OO') 
 ds = datasetQuery(cohort='coh1', week='w11', mouseID='M11', experiment='contrast') 
 ds = datasetQuery(cohort='coh1', week='w11', mouseID='M11', experiment='OR') 
 ds = datasetQuery(cohort='coh1', week='w11', mouseID='M11', experiment='DR') 
