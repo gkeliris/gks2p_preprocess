@@ -10,23 +10,23 @@ import pandas as pd
 import numpy as np
 import suite2p
 from ScanImageTiffReader import ScanImageTiffReader
-defaultCsvPath = '/mnt/NAS_UserStorage/georgioskeliris/MECP2TUN/MECP2_datasets.csv'
+defaultCsvPath = '/mnt/NAS_UserStorage/Mingyu/learning/2P imaging/LRN2P_datasets.csv'
 
 def datasetQuery(csvFilePath=defaultCsvPath,
-                 cohort=[], week=[], mouseID=[], ses=None, experiment=None):
+                 cohort=[],day=[], mouseID=[], ses=None, experiment=None):
     # read the datasets.csvs
     df = pd.read_csv(csvFilePath)
     if type(cohort) == str:
         cohort = [cohort]
-    if type(week) == str:
-        week = [week]
+    if type(day) == str:
+        day = [day]
     if type(mouseID) == str:
         mouseID = [mouseID]
         
     if cohort == []:
         cohort = list(df["cohort"].unique())
-    if week == []:
-        week = list(df["week"].unique())
+    if day == []:
+        day = list(df["day"].unique())
     if mouseID == []:
         mouseID = list(df["mouseID"].unique())
     if experiment is None:
@@ -36,7 +36,7 @@ def datasetQuery(csvFilePath=defaultCsvPath,
         exps = [(experiment + str(x)) for x in range(2,6)]
         exps.append(experiment)
         
-    ds = df[(df["cohort"].isin(cohort)) & (df["week"].isin(week)) & 
+    ds = df[(df["cohort"].isin(cohort)) & (df["day"].isin(day)) & 
             (df["mouseID"].isin(mouseID)) & (df["expID"].isin(exps))]
     
     datIDs=[]
@@ -50,26 +50,26 @@ def datasetQuery(csvFilePath=defaultCsvPath,
             ds = ds[(ds["datID"].isin(datIDs))]
     return ds
 
-def getDataPaths(cohort, week, experiment, csvFilePath=defaultCsvPath):
+def getDataPaths(cohort, day, experiment, csvFilePath=defaultCsvPath):
     df = pd.read_csv(csvFilePath)
     # account for possibility for exp2, exp3, exp4
     exps = [(experiment + str(x)) for x in range(2,6)]
     exps.append(experiment)
     
-    ds = df[(df["cohort"] == cohort) & (df["week"]== week) & (df["expID"].isin(exps))]
+    ds = df[(df["cohort"] == cohort) & (df["day"]== day) & (df["expID"].isin(exps))]
     return ds
 
-def getOneExpPath(cohort, week, mouseID, experiment, csvFilePath=defaultCsvPath):
+def getOneExpPath(cohort, day, mouseID, experiment, csvFilePath=defaultCsvPath):
     df = pd.read_csv(csvFilePath)
     # account for possibility for exp2, exp3, exp4
     exps = [(experiment + str(x)) for x in range(2,6)]
     exps.append(experiment)
     
-    ds = df[(df["cohort"] == cohort) & (df["week"]== week) & (df["mouseID"]==mouseID) & (df["expID"].isin(exps))]
+    ds = df[(df["cohort"] == cohort) & (df["day"]== day) & (df["mouseID"]==mouseID) & (df["expID"].isin(exps))]
     return ds
 
-def getOneSesPath(cohort, week, mouseID, sesX, experiment):
-    ds = getOneExpPath(cohort, week, mouseID, experiment)
+def getOneSesPath(cohort, day, mouseID, sesX, experiment):
+    ds = getOneExpPath(cohort, day, mouseID, experiment)
     # account for possibility for exp2, exp3, exp4
     exps = [(experiment + str(x)) for x in range(2,6)]
     exps.append(experiment)
