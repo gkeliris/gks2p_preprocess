@@ -29,10 +29,10 @@ def clear_all():
 def gks2p_path(dat, basepath, pathType="save_path0"):
     if pathType == "save_path0":
         outpath = os.path.join(basepath, 's2p_analysis', dat.cohort, 
-                dat.mouseID, dat.week, dat.session, dat.expID)
+                dat.mouseID, dat.day, dat.session, dat.expID)
     elif pathType == "fast_disk":
         outpath = os.path.join(basepath, 's2p_binaries', dat.cohort, 
-                dat.mouseID, dat.week, dat.session, dat.expID)
+                dat.mouseID, dat.day, dat.session, dat.expID)
     else:
         print("unknown type of path")
     return outpath

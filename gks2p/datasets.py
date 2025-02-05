@@ -13,7 +13,7 @@ from ScanImageTiffReader import ScanImageTiffReader
 defaultCsvPath = '/mnt/NAS_UserStorage/Mingyu/learning/2P imaging/LRN2P_datasets.csv'
 
 def datasetQuery(csvFilePath=defaultCsvPath,
-                 cohort=[],day=[], mouseID=[], ses=None, experiment=None):
+                 cohort=[], day=[], mouseID=[], ses=None, experiment=None):
     # read the datasets.csvs
     df = pd.read_csv(csvFilePath)
     if type(cohort) == str:
