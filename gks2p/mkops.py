@@ -115,7 +115,8 @@ def mkops(savepath0, dat, db={}, fastdisk=None):
             ops['lines'].append(
                 np.arange(field_info.yslices[0].start, field_info.yslices[0].stop)
             )
-        #remove potentially negative numbers from ops['dy']
+        #remove potentially negative numbers from ops['dx'] and ops['dy']
+        ops['dx']=[int(x) for x in list(np.array(ops['dx'])-min(np.array(ops['dx'])))]
         ops['dy']=[int(x) for x in list(np.array(ops['dy'])-min(np.array(ops['dy'])))]
         print(ops['dx'])
         print(ops['dy'])
