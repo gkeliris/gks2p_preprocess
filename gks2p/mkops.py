@@ -9,6 +9,7 @@ Created on Thu Dec 28 13:07:12 2023
 import os
 #import json
 import numpy as np
+import scipy.io
 import suite2p
 import scanreader
 
@@ -54,7 +55,7 @@ def mkops(savepath0, dat, db={}, fastdisk=None):
 
     ops['fs'] = scan.fps
     ops['nchannels'] = scan.num_channels
-    
+    ops['num_scanning_depths'] = scan.num_scanning_depths
     ops['nrois'] = scan.num_rois
     plane_nrois = {i:scan.field_depths.count(i) for i in scan.field_depths}
     ops['nroisPerPlane'] = [plane_nrois[i] for i in plane_nrois.keys()]
@@ -135,5 +136,5 @@ def mkops(savepath0, dat, db={}, fastdisk=None):
         os.makedirs(ops['fast_disk'], exist_ok=True)
     # save the ops
     np.save(os.path.join(ops['save_path0'], 'ops_' + db['pipeline']),ops)
-
+    scipy.io.savemat(os.path.join(ops['save_path0'], 'ops_' + db['pipeline']) + ".mat", {"ops": ops})
     return ops
