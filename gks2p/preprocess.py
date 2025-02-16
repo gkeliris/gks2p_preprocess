@@ -8,6 +8,7 @@ Created on Wed Jan 24 19:08:18 2024
 import numpy as np
 import suite2p
 from suite2p import registration
+import fissa
 import sys
 from pathlib import Path 
 from natsort import natsorted
@@ -396,9 +397,6 @@ def gks2p_opsPerPlane(ds, basepath, pipeline="orig", iplaneList=None):
     
         ops1=suite2p.io.utils.init_ops(ops)
 '''
-        
-        
-
 
 def gks2p_correctOpsPerPlane(ds, basepath):
     for d in range(len(ds)):
@@ -431,3 +429,42 @@ for i in range(len(ops1)):
 '''
     
     
+def gks2p_fissa(ds, basepath, iplaneList=None):
+    opsList = gks2p_loadOps(ds, basepath)
+    for d in range(len(ds)):
+        ops = opsList[d]
+        svf = os.path.join(ops['save_path0'],ops['save_folder'])
+        opsPPlist = gks2p_loadOpsPerPlane(svf)
+        if iplaneList is None:
+            iplaneList=[x for x in range(len(opsPPlist))]
+        for p in iplaneList:
+            opsPP = opsPPlist[p]
+            stat=np.load(os.path.join(opsPP['save_path'],'stat.npy'),allow_pickle=True)
+            iscell=np.load(os.path.join(opsPP['save_path'],'iscell.npy'),allow_pickle=True)[:,0]
+
+            # Get image size
+            Lx = opsPP['Lx']
+            Ly = opsPP['Ly']
+            
+            # Get the cell ids
+            ncells = len(stat)
+            cell_ids = np.arange(ncells)  # assign each cell an ID, starting from 0.
+            cell_ids = cell_ids[iscell == 1]  # only take the ROIs that are actually cells.
+            num_rois = len(cell_ids)
+            
+            # Generate ROI masks in a format usable by FISSA (in this case, a list of masks)
+            rois = [np.zeros((Ly, Lx), dtype=bool) for n in range(num_rois)]
+            
+            for i, n in enumerate(cell_ids):
+                # i is the position in cell_ids, and n is the actual cell number
+                ypix = stat[n]["ypix"][~stat[n]["overlap"]]
+                xpix = stat[n]["xpix"][~stat[n]["overlap"]]
+                rois[i][ypix, xpix] = 1
+            
+            #imagesBin = suite2p.io.BinaryFile(Ly=Ly, Lx=Lx, filename=opsPP[0]['reg_file'])
+            images = os.path.join(opsPP['save_path'],'reg_tif')
+            output_folder = os.path.join(opsPP['save_path'],'FISSA')
+            experiment = fissa.Experiment(images, [rois[:ncells]], output_folder)
+            experiment.separate()
+
+    return
