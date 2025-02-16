@@ -476,4 +476,4 @@ def gks2p_fissa(ds, basepath, iplaneList=None):
             experiment = fissa.Experiment(images, [rois[:ncells]], output_folder)
             experiment.separate()
 
-    return
+    return experiment
