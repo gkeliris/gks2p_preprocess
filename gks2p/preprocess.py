@@ -455,11 +455,20 @@ def gks2p_fissa(ds, basepath, iplaneList=None):
             # Generate ROI masks in a format usable by FISSA (in this case, a list of masks)
             rois = [np.zeros((Ly, Lx), dtype=bool) for n in range(num_rois)]
             
+            empty_rois=[]
             for i, n in enumerate(cell_ids):
                 # i is the position in cell_ids, and n is the actual cell number
                 ypix = stat[n]["ypix"][~stat[n]["overlap"]]
+                if len(ypix)==0:
+                    empty_rois.append(n)
                 xpix = stat[n]["xpix"][~stat[n]["overlap"]]
                 rois[i][ypix, xpix] = 1
+            
+            if len(empty_rois):
+                print("\nThe following empty ROIs were found:\n")
+                print(empty_rois)
+                print("\nPlease correct in suite2p GUI and try again\n")
+                return
             
             #imagesBin = suite2p.io.BinaryFile(Ly=Ly, Lx=Lx, filename=opsPP[0]['reg_file'])
             images = os.path.join(opsPP['save_path'],'reg_tif')
