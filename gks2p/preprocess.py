@@ -429,7 +429,7 @@ for i in range(len(ops1)):
 '''
     
     
-def gks2p_fissa(ds, basepath, iplaneList=None):
+def gks2p_fissa(ds, basepath, iplaneList=None, nCores=None, use_reg_tif=False, redo_prep=False):
     opsList = gks2p_loadOps(ds, basepath)
     for d in range(len(ds)):
         ops = opsList[d]
@@ -470,10 +470,26 @@ def gks2p_fissa(ds, basepath, iplaneList=None):
                 print("\nPlease correct in suite2p GUI and try again\n")
                 return
             
-            #imagesBin = suite2p.io.BinaryFile(Ly=Ly, Lx=Lx, filename=opsPP[0]['reg_file'])
-            images = os.path.join(opsPP['save_path'],'reg_tif')
+            if use_reg_tif:
+                images = os.path.join(opsPP['save_path'],'reg_tif')
+            else:
+                tmp = suite2p.io.BinaryFile(Ly=Ly, Lx=Lx, filename=opsPP['reg_file'])
+                images = [np.array(tmp[:,:,:])]
+
             output_folder = os.path.join(opsPP['save_path'],'FISSA')
-            experiment = fissa.Experiment(images, [rois[:ncells]], output_folder)
-            experiment.separate()
+            experiment = fissa.Experiment(
+                images,
+                [rois[:ncells]],
+                output_folder,
+                ncores_preparation=nCores,
+                ncores_separation=nCores,
+                verbosity=6
+            )
+            experiment.separate(redo_prep=redo_prep)
+            
+            sampling_frequency = ops['fs']  # Hz
+            experiment.calc_deltaf(freq=sampling_frequency)
+            
+            experiment.to_matfile()
 
     return experiment
