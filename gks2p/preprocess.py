@@ -38,20 +38,35 @@ def gks2p_path(dat, basepath, pathType="save_path0"):
         print("unknown type of path")
     return outpath
     
-def gks2p_makeOps(ds, basepath, db={}, fastbase=None):
+def gks2p_makeOps(ds, basepath, db={}, fastbase=None, combine_folder=None):
     if fastbase == None:
         fastbase = basepath
-    for d in range(0,len(ds)):
-        print('\n\nPROCESSING:')
-        print(ds.iloc[d])
-        try:
-            ops = mkops(gks2p_path(ds.iloc[d],basepath), ds.iloc[d], db, 
-                        fastdisk=gks2p_path(ds.iloc[d],fastbase,'fast_disk'))
-        except Exception as error:
-        # handle the exception
-            print('\n****** -> PROBLEM WITH THIS DATASET ****\n')
-            print("An exception occurred:", type(error).__name__, "-", error)
-    return
+    if combine_folder is not None:
+        subfolders = []
+        for d in range(0,len(ds)):
+            subfolders.append(ds.iloc[d].rawPath)
+        db_combine = {
+            'look_one_level_down': True,
+            'subfolders': subfolders
+        }
+        db = {**db, **db_combine}
+        head, tail = os.path.split(gks2p_path(ds.iloc[0],basepath))
+        save_path0 = os.path.join(head,combine_folder)
+        head, tail = os.path.split(gks2p_path(ds.iloc[0],fastbase,'fast_disk'))
+        fastdisk = os.path.join(head,combine_folder)
+        ops = mkops(save_path0, ds.iloc[0], db, fastdisk=fastdisk)
+    else:
+        for d in range(0,len(ds)):
+            print('\n\nPROCESSING:')
+            print(ds.iloc[d])
+            try:
+                ops = mkops(gks2p_path(ds.iloc[d],basepath), ds.iloc[d], db, 
+                            fastdisk=gks2p_path(ds.iloc[d],fastbase,'fast_disk'))
+            except Exception as error:
+            # handle the exception
+                print('\n****** -> PROBLEM WITH THIS DATASET ****\n')
+                print("An exception occurred:", type(error).__name__, "-", error)
+    return ops
 
 def gks2p_loadOps(ds, basepath, pipeline="orig"):
     opsPath = []
