@@ -15,6 +15,7 @@ from natsort import natsorted
 import shutil
 import os
 from gks2p.mkops import mkops
+import tifffile
 
 def clear_all():
     """Clears all the variables from the workspace of the spyder application."""
@@ -67,7 +68,9 @@ def gks2p_makeOps(ds, basepath, db={}, fastbase=None, combine_folder=None):
                 print('\n****** -> PROBLEM WITH THIS DATASET ****\n')
                 print("An exception occurred:", type(error).__name__, "-", error)
     return ops
-
+'''
+def gks2p_makeOps_bruker(ds, basepath, db={}, fastbase=None):
+'''
 def gks2p_loadOps(ds, basepath, pipeline="orig"):
     opsPath = []
     for d in range(len(ds)):
@@ -508,3 +511,57 @@ def gks2p_fissa(ds, basepath, iplaneList=None, nCores=None, use_reg_tif=False, r
             experiment.to_matfile()
 
     return experiment
+
+
+def gks2p_split_bruker_multipage_tif(input_folder, output_folder):
+    """
+    Splits all multipage TIFF files in a folder into individual OME-TIFF files,
+    one for each frame, and saves them to a specified output folder.
+
+    Frame counts are kept separately for Ch1, Ch2, and other files.
+
+    Args:
+        input_folder (str): The path of the folder containing multipage TIFF files.
+        output_folder (str): The path of the output folder.
+    """
+    # Ensure the output folder exists, create it if it doesn't
+    os.makedirs(output_folder, exist_ok=True)
+
+    # Get a list of all TIFF files in the input folder
+    tif_files = [f for f in os.listdir(input_folder) if f.endswith('.tif') or f.endswith('.tiff')]
+
+    # Initialize frame counters for each channel
+    frame_counters = {'Ch1': 0, 'Ch2': 0, 'other': 0}
+
+    # Iterate over each TIFF file in the input folder
+    for file in tif_files:
+        file_path = os.path.join(input_folder, file)
+
+        # Check if the file name includes Ch1 or Ch2 to determine which counter to use
+        if 'Ch1' in file:
+            counter_key = 'Ch1'
+        elif 'Ch2' in file:
+            counter_key = 'Ch2'
+        else:
+            counter_key = 'other'
+
+        # Load the multipage TIFF file
+        with tifffile.TiffFile(file_path) as tif:
+            # Get the number of frames in the multipage TIFF file
+            num_frames = len(tif.pages)
+
+            # Iterate over each frame in the multipage TIFF file
+            for frame_index in range(num_frames):
+                # Generate the new file name for the frame
+                filename, file_extension = os.path.splitext(file)
+                new_file = f"{filename}_frame_{frame_counters[counter_key]:06d}{file_extension}"
+                new_file_path = os.path.join(output_folder, new_file)
+
+                # Extract the frame data from the multipage TIFF file
+                frame_data = tif.pages[frame_index].asarray()
+
+                # Save the frame data as an OME-TIFF file
+                tifffile.imwrite(new_file_path, frame_data)
+
+                # Increment the appropriate frame counter
+                frame_counters[counter_key] += 1

@@ -15,6 +15,23 @@ import scanreader
 
 def mkops(savepath0, dat, db={}, fastdisk=None):
     
+    """
+    Generates and saves a dictionary of operational parameters for Suite2P processing.
+
+    Args:
+        savepath0 (str): The base directory where the output ops file will be saved.
+        dat (pandas.Series): A pandas Series containing dataset information, including `rawPath` and `firstTiff` attributes.
+        db (dict, optional): A dictionary containing database parameters for Suite2P. Defaults to an empty dict.
+        fastdisk (str, optional): The directory for fast disk storage. Defaults to None.
+
+    Returns:
+        dict: A dictionary containing the operational parameters for Suite2P.
+
+    Notes:
+        - The function calculates various parameters required for Suite2P using scan data.
+        - It modifies the 'ops' dictionary with custom parameters and saves it in both .npy and .mat formats.
+    """
+
     if 'pipeline' not in db.keys():
         db['pipeline']='orig'
     
