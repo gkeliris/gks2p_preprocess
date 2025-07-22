@@ -12,9 +12,9 @@ This code uses modified suite2p that can be used in modules
     > python -m pip install "suite2p[gui] @ git+https://github.com/gkeliris/suite2p.git@gks2p"
 - install scanreader
     > pip3 install git+https://github.com/atlab/scanreader.git    
-- install the gks2p_preprocess repository from github
+- install the gks2p_preprocess repository from github (choose one)
     > python -m pip install git+https://github.com/gkeliris/gks2p_preprocess.git@mecp2   (for MeCP2 datasets)
-    > or
+
     > python -m pip install git+https://github.com/gkeliris/gks2p_preprocess.git@lrn2p   (for learning datasets)
 
 ### In case of problems / optional 
