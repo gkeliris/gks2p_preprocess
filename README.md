@@ -17,6 +17,8 @@ This code uses modified suite2p that can be used in modules
 
     > python -m pip install git+https://github.com/gkeliris/gks2p_preprocess.git@lrn2p   (for learning datasets)
 
+    > python -m pip install git+https://github.com/gkeliris/gks2p_preprocess.git@tepi   (for temperature epilepsy)
+    
 ### In case of problems / optional 
 - optional in case not working
     > sudo apt-get install libegl1
