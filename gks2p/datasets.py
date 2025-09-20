@@ -10,23 +10,23 @@ import pandas as pd
 import numpy as np
 import suite2p
 from ScanImageTiffReader import ScanImageTiffReader
-defaultCsvPath = '/mnt/NAS_UserStorage/Mingyu/learning/2P imaging/LRN2P_datasets.csv'
+defaultCsvPath = '/mnt/NAS_DataStorage/Data_raw/Temperature_epilepsy/TEPI_datasets.csv'
 
 def datasetQuery(csvFilePath=defaultCsvPath,
-                 cohort=[], day=[], mouseID=[], ses=None, experiment=None):
+                 cohort=[], timepoint=[], mouseID=[], ses=None, experiment=None):
     # read the datasets.csvs
     df = pd.read_csv(csvFilePath)
     if type(cohort) == str:
         cohort = [cohort]
-    if type(day) == str:
-        day = [day]
+    if type(timepoint) == str:
+        timepoint = [timepoint]
     if type(mouseID) == str:
         mouseID = [mouseID]
         
     if cohort == []:
         cohort = list(df["cohort"].unique())
-    if day == []:
-        day = list(df["day"].unique())
+    if timepoint == []:
+        timepoint = list(df["timepoint"].unique())
     if mouseID == []:
         mouseID = list(df["mouseID"].unique())
     if experiment is None:
@@ -36,7 +36,7 @@ def datasetQuery(csvFilePath=defaultCsvPath,
         exps = [(experiment + str(x)) for x in range(2,6)]
         exps.append(experiment)
         
-    ds = df[(df["cohort"].isin(cohort)) & (df["day"].isin(day)) & 
+    ds = df[(df["cohort"].isin(cohort)) & (df["timepoint"].isin(timepoint)) & 
             (df["mouseID"].isin(mouseID)) & (df["expID"].isin(exps))]
     
     datIDs=[]

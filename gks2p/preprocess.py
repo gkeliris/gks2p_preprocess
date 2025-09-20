@@ -14,7 +14,7 @@ from pathlib import Path
 from natsort import natsorted
 import shutil
 import os
-from gks2p.mkops import mkops
+from gks2p.mkops import mkops, generate_ops_from_metadata, parse_bruker_xml
 import tifffile
 
 def clear_all():
@@ -31,10 +31,10 @@ def clear_all():
 def gks2p_path(dat, basepath, pathType="save_path0"):
     if pathType == "save_path0":
         outpath = os.path.join(basepath, 's2p_analysis', dat.cohort, 
-                dat.mouseID, dat.day, dat.session, dat.expID)
+                dat.mouseID, dat.timepoint, dat.session, dat.expID)
     elif pathType == "fast_disk":
         outpath = os.path.join(basepath, 's2p_binaries', dat.cohort, 
-                dat.mouseID, dat.day, dat.session, dat.expID)
+                dat.mouseID, dat.timepoint, dat.session, dat.expID)
     else:
         print("unknown type of path")
     return outpath
@@ -68,9 +68,20 @@ def gks2p_makeOps(ds, basepath, db={}, fastbase=None, combine_folder=None):
                 print('\n****** -> PROBLEM WITH THIS DATASET ****\n')
                 print("An exception occurred:", type(error).__name__, "-", error)
     return ops
-'''
+
 def gks2p_makeOps_bruker(ds, basepath, db={}, fastbase=None):
-'''
+    for d in range(0,len(ds)):
+        print('\n\nPROCESSING:')
+        print(ds.iloc[d])
+        try:
+            ops = generate_ops_from_metadata(gks2p_path(ds.iloc[d],basepath), ds.iloc[d], db, 
+                            fastdisk=gks2p_path(ds.iloc[d],fastbase,'fast_disk'))
+        except Exception as error:
+            # handle the exception
+            print('\n****** -> PROBLEM WITH THIS DATASET ****\n')
+            print("An exception occurred:", type(error).__name__, "-", error)
+    return ops
+
 def gks2p_loadOps(ds, basepath, pipeline="orig"):
     opsPath = []
     for d in range(len(ds)):
@@ -152,7 +163,7 @@ def gks2p_toBinary(ds, basepath):
     opsList = gks2p_loadOps(ds, basepath)
     for d in range(len(ds)):
         dat=ds.iloc[d] # Convert the pandas DataFrame to a pandas Series
-        print(dat)
+        print(dat.rawPath)
         ops = opsList[d]
         suite2p.run_s2p_toBinary(ops=ops)
         #suite2p.run_planes(ops=ops)
@@ -168,13 +179,15 @@ def gks2p_register(ds, basepath, pipeline='orig', iplaneList=None):
         ops = opsList[d]
         
         if iplaneList is None:
-            cur_iplaneList=[x for x in range(len(ops['dx']))]
+            if ops['bruker']:
+                cur_iplaneList = [0]  # For Bruker data, we only register the first plane   
+            else:
+                cur_iplaneList=[x for x in range(len(ops['dx']))]
         else:
             cur_iplaneList=iplaneList
         
         for iplane in cur_iplaneList:
             print("\nREGISTERING: plane" + str(iplane))
-            #opsstr= os.path.join(ops['save_path0'],'suite2p_' + pipeline,'plane' + str(iplane), 'ops.npy')
             pathstr= os.path.join(ops['save_path0'],
                                   'suite2p_' + pipeline,'plane' + str(iplane))
             opsstr=os.path.join(pathstr,'ops.npy')
@@ -187,23 +200,50 @@ def gks2p_register(ds, basepath, pipeline='orig', iplaneList=None):
             opsPlane = {**opsPlane, **ops}
             Ly=opsPlane['Ly']
             Lx=opsPlane['Lx']
-            
+
+            # Channel 1 (main)
             f1 = suite2p.io.BinaryFile(Ly=Ly, Lx=Lx,
-                            filename=os.path.join(ops['fast_disk'],'suite2p',
-                            'plane' + str(iplane), 'data_raw.bin'))
+                filename=os.path.join(ops['fast_disk'],'suite2p',
+                'plane' + str(iplane), 'data_raw.bin'))
             n_frames = f1.shape[0]
             if pipeline=='orig':
                 reg_file="data.bin"
             else:
                 reg_file="data_" + pipeline + ".bin"
+
             f1_reg = suite2p.io.BinaryFile(Ly=Ly, Lx=Lx,
-                            filename=os.path.join(ops['fast_disk'],'suite2p',
-                            'plane' + str(iplane), reg_file), n_frames = n_frames)
-        
-            registration_outputs = suite2p.registration_wrapper(f1_reg, f_raw=f1, f_reg_chan2=None, 
-                                                               f_raw_chan2=None, refImg=None, 
-                                                               align_by_chan2=False, ops=opsPlane)
+                filename=os.path.join(ops['fast_disk'],'suite2p',
+                'plane' + str(iplane), reg_file), n_frames = n_frames)
+
+            # Channel 2 (optional)
+            chan2_path = os.path.join(ops['fast_disk'],'suite2p',
+                'plane' + str(iplane), 'data_chan2_raw.bin')
+            if os.path.isfile(chan2_path):
+                f2 = suite2p.io.BinaryFile(Ly=Ly, Lx=Lx, filename=chan2_path)
+                if pipeline=='orig':
+                    reg_file2="data_chan2.bin"
+                else:
+                    reg_file2="data_chan2" + pipeline + ".bin"
+                print(f"Found channel 2 data for plane {iplane}. Registering both channels.")
+
+                f2_reg = suite2p.io.BinaryFile(Ly=Ly, Lx=Lx,
+                    filename=os.path.join(ops['fast_disk'],'suite2p',
+                    'plane' + str(iplane), reg_file2), n_frames = n_frames)
+            else:
+                f2 = None
+                f2_reg = None
+
+            # Switch channels if specified
+            if ops['switch_chan'] == 1:
+                f1, f2 = f2, f1
+                print("Switched channels for registration.")
             
+            registration_outputs = suite2p.registration_wrapper(
+                f1_reg, f_raw=f1, f_reg_chan2= f2_reg,
+                f_raw_chan2=f2, refImg=None,
+                align_by_chan2=ops['align_by_chan'], ops=opsPlane
+            )
+
             suite2p.registration.register.save_registration_outputs_to_ops(registration_outputs, opsPlane)
             # add enhanced mean image
             meanImgE = suite2p.registration.compute_enhanced_mean_image(
@@ -219,7 +259,7 @@ def gks2p_register(ds, basepath, pipeline='orig', iplaneList=None):
 
                 refImg = f1_reg[inds].astype(np.float32).mean(axis=0)
                 registration_outputs = suite2p.registration_wrapper(
-                    f1_reg, f_raw=None, f_reg_chan2=None, f_raw_chan2=None,
+                    f1_reg, f_raw=None, f_reg_chan2=f2_reg, f_raw_chan2=None,
                     refImg=refImg, align_by_chan2=False, ops=opsPlane)
                 np.save(opsstr,opsPlane)
             
@@ -246,7 +286,10 @@ def gks2p_segment(ds, basepath, pipeline='orig', iplaneList=None):
         ops = opsList[d]
 
         if iplaneList is None:
-            cur_iplaneList=[x for x in range(len(ops['dx']))]
+            if ops['bruker']:
+                cur_iplaneList = [0]  # For Bruker data, we only register the first plane   
+            else:
+                cur_iplaneList=[x for x in range(len(ops['dx']))]
         else:
             cur_iplaneList=iplaneList
         
@@ -276,12 +319,13 @@ def gks2p_segment(ds, basepath, pipeline='orig', iplaneList=None):
                     filename=os.path.join(opsPlane['fast_disk'],'suite2p', 
                                       'plane' + str(iplane), 'data.bin'))
             
+            
             opsPlane, stat = suite2p.detection_wrapper(f_reg=f_reg, 
                                             ops=opsPlane, classfile=classfile)
             
             np.save(opsstr,opsPlane)
             np.save(os.path.join(pathstr,'stat.npy'),stat)
-                
+            
             # Fluorescence Extraction
             stat_after_extraction, F, Fneu, F_chan2, Fneu_chan2 = \
                 suite2p.extraction_wrapper(stat, f_reg, f_reg_chan2 = None,
@@ -513,19 +557,17 @@ def gks2p_fissa(ds, basepath, iplaneList=None, nCores=None, use_reg_tif=False, r
     return experiment
 
 
-def gks2p_split_bruker_multipage_tif(input_folder, output_folder):
+def gks2p_split_bruker_multipage_tif(input_folder):
     """
     Splits all multipage TIFF files in a folder into individual OME-TIFF files,
-    one for each frame, and saves them to a specified output folder.
-
-    Frame counts are kept separately for Ch1, Ch2, and other files.
-
-    Args:
-        input_folder (str): The path of the folder containing multipage TIFF files.
-        output_folder (str): The path of the output folder.
+    one for each frame, and saves them to the same folder.
+    Moves the original TIFF files to a subfolder called 'original_tiffs'.
     """
-    # Ensure the output folder exists, create it if it doesn't
-    os.makedirs(output_folder, exist_ok=True)
+    import shutil
+
+    # Create subfolder for original TIFFs
+    single_tiffs_folder = os.path.join(input_folder, 'single_frame_tiffs')
+    os.makedirs(single_tiffs_folder, exist_ok=True)
 
     # Get a list of all TIFF files in the input folder
     tif_files = [f for f in os.listdir(input_folder) if f.endswith('.tif') or f.endswith('.tiff')]
@@ -547,21 +589,14 @@ def gks2p_split_bruker_multipage_tif(input_folder, output_folder):
 
         # Load the multipage TIFF file
         with tifffile.TiffFile(file_path) as tif:
-            # Get the number of frames in the multipage TIFF file
             num_frames = len(tif.pages)
-
-            # Iterate over each frame in the multipage TIFF file
             for frame_index in range(num_frames):
-                # Generate the new file name for the frame
                 filename, file_extension = os.path.splitext(file)
                 new_file = f"{filename}_frame_{frame_counters[counter_key]:06d}{file_extension}"
-                new_file_path = os.path.join(output_folder, new_file)
-
-                # Extract the frame data from the multipage TIFF file
+                new_file_path = os.path.join(input_folder, single_tiffs_folder, new_file)
                 frame_data = tif.pages[frame_index].asarray()
-
-                # Save the frame data as an OME-TIFF file
                 tifffile.imwrite(new_file_path, frame_data)
-
-                # Increment the appropriate frame counter
                 frame_counters[counter_key] += 1
+
+        # Move the original TIFF file to the 'original_tiffs' subfolder
+        # shutil.move(file_path, os.path.join(original_tiffs_folder, file))
