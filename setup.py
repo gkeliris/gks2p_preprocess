@@ -11,7 +11,7 @@ setup(
     author='Georgios A. Keliris',
     author_email='georgios.keliris@outlook.com',
     license='MIT',
-    url='https://github.com/gkeliris/gks2p',
+    url='https://github.com/gkeliris/gks2p_preprocess',
     keywords='suite2p module-based gks2p',
     packages=['gks2p'],
     install_requires=['tifffile', 'natsort'],
