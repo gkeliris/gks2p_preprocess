@@ -4,10 +4,10 @@ This code uses modified suite2p that can be used in modules
 ---
 ## Setting up
 ### Installation
-- create conda environment
-    > conda create --name [envname] python=3.9 pandas scipy spyder
-- activate conda environment
-    > conda activate [envname]
+- create mamba environment
+    > mamba create --name [envname] python=3.9 pandas scipy
+- activate mamba environment
+    > mamba activate [envname]
 - install GAK:suite2p package directly from github
     > python -m pip install "suite2p[gui] @ git+https://github.com/gkeliris/suite2p.git@gks2p"
 - install scanreader
@@ -18,6 +18,10 @@ This code uses modified suite2p that can be used in modules
     > python -m pip install git+https://github.com/gkeliris/gks2p_preprocess.git@lrn2p   (for learning datasets)
 
     > python -m pip install git+https://github.com/gkeliris/gks2p_preprocess.git@tepi   (for temperature epilepsy)
+
+- install FISSA
+    > pip install fissa
+
     
 ### In case of problems / optional 
 - optional in case not working
