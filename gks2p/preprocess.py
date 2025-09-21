@@ -136,10 +136,14 @@ def gks2p_updateOpsPerPlane(ds, basepath, fastbase=None, pipeline="orig"):
             np.save(ops1[0]['ops_path'],ops1[0])
     return
 
-def gks2p_import(dat, import_folder, basepath, fastbase=None, db={}):
+def gks2p_import(dat, import_folder, basepath, fastbase=None, db={}, bruker=False):
     if fastbase==None:
         fastbase=basepath
-    ops = mkops(gks2p_path(dat,basepath), dat, db, 
+    if bruker:
+        ops = generate_ops_from_metadata(gks2p_path(dat,basepath), dat, db, 
+                fastdisk=gks2p_path(dat,fastbase,'fast_disk'))
+    else:
+        ops = mkops(gks2p_path(dat,basepath), dat, db, 
                 fastdisk=gks2p_path(dat,fastbase,'fast_disk'))
     os.makedirs(os.path.join(gks2p_path(dat,basepath),'matlabana'), exist_ok=True)
     [shutil.copy(mf,os.path.join(gks2p_path(dat,basepath),'matlabana')) for mf in \
