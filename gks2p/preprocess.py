@@ -6,16 +6,31 @@ Created on Wed Jan 24 19:08:18 2024
 @author: georgioskeliris
 """
 import numpy as np
-import suite2p
-from suite2p import registration
-import fissa
 import sys
-from pathlib import Path 
+from pathlib import Path
 from natsort import natsorted
 import shutil
 import os
+
+# Import helpers from mkops; also import tifffile for compatibility with some readers
 from gks2p.mkops import mkops, generate_ops_from_metadata, parse_bruker_xml
 import tifffile
+from typing import Optional, Dict
+
+# Optional heavy dependencies: allow importing preprocess even when
+# suite2p/fissa are not installed. Functions that need them will raise
+# informative ImportError at runtime.
+try:
+    import suite2p
+    from suite2p import registration
+except Exception:
+    suite2p = None
+    registration = None
+
+try:
+    import fissa
+except Exception:
+    fissa = None
 
 def clear_all():
     """Clears all the variables from the workspace of the spyder application."""
@@ -279,6 +294,154 @@ def gks2p_register(ds, basepath, pipeline='orig', iplaneList=None):
                           opsPlane["xrange"][0]:opsPlane["xrange"][-1]]
                 opsPlane = suite2p.registration.get_pc_metrics(mov, opsPlane)
                 np.save(opsstr,opsPlane)
+    return
+
+
+def gks2p_smooth(
+    ds,
+    basepath,
+    pipeline='orig',
+    method='block',
+    method_kwargs: Optional[Dict] = None,
+    iplaneList=None,
+    inplace: bool = False,
+    update_ops: bool = False,
+    verbose: bool = True,
+):
+    """
+    High-level helper to apply temporal smoothing to Suite2p binaries for datasets.
+
+    Parameters
+    - ds, basepath: same as other helpers (dataset dataframe and base path)
+    - pipeline: which suite2p pipeline folder to target (e.g. 'orig' or custom)
+    - method: smoothing method passed to the smoothing wrapper (block, gaussian, ...)
+    - method_kwargs: dict of method-specific kwargs (e.g., x=2 or sigma_frames=1.5)
+    - iplaneList: list of plane indices to process; defaults to all planes in ops['dx']
+    - inplace: if True, replace input .bin (smooth wrapper handles rename/backup)
+    - update_ops: if True, update the per-plane ops.npy nframes key after smoothing
+    - verbose: passed through to the smoothing routine
+
+    This function mirrors the pattern used by `gks2p_register` / `gks2p_segment`:
+    it finds the per-plane `ops.npy` (falling back to suite2p_orig), merges with the
+    dataset-level ops, determines Lx/Ly and the binary path and then calls the
+    smoothing wrapper from `gks2p.suite2p_temporal_smoothing`.
+    """
+    if method_kwargs is None:
+        method_kwargs = {}
+
+    opsList = gks2p_loadOps(ds, basepath, pipeline)
+    for d in range(len(ds)):
+        dat = ds.iloc[d]
+        print(dat)
+        ops = opsList[d]
+
+        if iplaneList is None:
+            cur_iplaneList = [x for x in range(len(ops['dx']))]
+        else:
+            cur_iplaneList = iplaneList
+
+        for iplane in cur_iplaneList:
+            print("\nSMOOTHING: plane" + str(iplane))
+            pathstr = os.path.join(ops['save_path0'], 'suite2p_' + pipeline, 'plane' + str(iplane))
+            opsstr = os.path.join(pathstr, 'ops.npy')
+            if not os.path.isfile(opsstr):
+                opsstr_orig = os.path.join(ops['save_path0'], 'suite2p_orig', 'plane' + str(iplane), 'ops.npy')
+                os.makedirs(pathstr, exist_ok=True)
+                opsPlane = np.load(opsstr_orig, allow_pickle=True).item()
+                # Persist a copy into the pipeline folder so updates operate on the
+                # pipeline ops file (ops.npy) rather than only the original copy.
+                try:
+                    np.save(opsstr, opsPlane, allow_pickle=True)
+                except Exception as e:
+                    print(f"Warning: failed to write pipeline ops file at {opsstr}: {e}")
+            else:
+                opsPlane = np.load(opsstr, allow_pickle=True).item()
+
+            # Merge dataset-level ops into plane ops (plane ops take precedence)
+            opsPlane = {**opsPlane, **ops}
+
+            Ly = opsPlane['Ly']
+            Lx = opsPlane['Lx']
+            nch = opsPlane.get('nchannels', 1)
+            # dtype may be stored under different names; try common keys then fallback
+            dtype = opsPlane.get('dtype', opsPlane.get('movie_dtype', 'int16')) or 'int16'
+
+            # Prefer the registered/processed movie for the chosen pipeline, fall back to raw
+            reg_file = 'data.bin' if pipeline == 'orig' else f"data_{pipeline}.bin"
+            bin_path = os.path.join(ops['fast_disk'], 'suite2p', 'plane' + str(iplane), reg_file)
+            if not os.path.isfile(bin_path):
+                alt = os.path.join(ops['fast_disk'], 'suite2p', 'plane' + str(iplane), 'data_raw.bin')
+                if os.path.isfile(alt):
+                    bin_path = alt
+                else:
+                    print(f"Bin file not found for plane {iplane}: {bin_path} (skipping)")
+                    continue
+
+            # Import lazily to avoid heavy deps at module import time
+            from gks2p.suite2p_temporal_smoothing import smooth_suite2p_bin, update_ops_nframes, BinSpec
+
+            # Call smoothing wrapper; pass method kwargs through
+            try:
+                final_path, backup = smooth_suite2p_bin(
+                    bin_path,
+                    Lx=Lx,
+                    Ly=Ly,
+                    nchannels=nch,
+                    dtype=dtype,
+                    method=method,
+                    out_path=method_kwargs.get('out_path', None),
+                    out_dtype=method_kwargs.get('out_dtype', 'float32'),
+                    inplace=inplace,
+                    downsample_factor=method_kwargs.get('downsample_factor', None),
+                    downsample_mode=method_kwargs.get('downsample_mode', 'decimate'),
+                    keep_remainder=method_kwargs.get('keep_remainder', False),
+                    x=method_kwargs.get('x', None),
+                    sigma_frames=method_kwargs.get('sigma_frames', None),
+                    tau_frames=method_kwargs.get('tau_frames', None),
+                    window_frames=method_kwargs.get('window_frames', None),
+                    sg_window=method_kwargs.get('sg_window', None),
+                    sg_polyorder=method_kwargs.get('sg_polyorder', None),
+                    truncate=method_kwargs.get('truncate', 3.0),
+                    chunk_frames=method_kwargs.get('chunk_frames', 64),
+                    mode=method_kwargs.get('mode', 'reflect'),
+                    verbose=verbose,
+                )
+            except Exception as e:
+                print(f"Error while smoothing plane {iplane}: {e}")
+                continue
+
+            # Optionally update ops.npy with the new frame count
+            if update_ops and final_path is not None:
+                spec_new = BinSpec(path=final_path, Lx=Lx, Ly=Ly, nchannels=nch, dtype=method_kwargs.get('out_dtype', 'float32'))
+                try:
+                    new_T = spec_new.n_frames()
+                    if os.path.isfile(opsstr):
+                        # determine original nframes if available so updater can rescale fs
+                        original_n = None
+                        for k in ('nframes', 'nFrames', 'nFramesTot'):
+                            if k in opsPlane:
+                                try:
+                                    original_n = int(opsPlane[k])
+                                    break
+                                except Exception:
+                                    original_n = None
+
+                        # fallback: try to compute nframes from the original bin (before smoothing)
+                        if original_n is None:
+                            try:
+                                spec_old = BinSpec(path=bin_path, Lx=Lx, Ly=Ly, nchannels=nch, dtype=opsPlane.get('dtype', 'int16'))
+                                original_n = spec_old.n_frames()
+                            except Exception:
+                                original_n = None
+
+                        scale_sampling = method_kwargs.get('scale_sampling', True)
+                        update_ops_nframes(opsstr, new_T, original_nframes=original_n, scale_sampling=bool(scale_sampling), backup_path=backup)
+                        print(f"Updated {opsstr} with nframes={new_T} (scale_sampling={bool(scale_sampling)})")
+                    else:
+                        print(f"ops file not found at {opsstr}; skipping ops update")
+                except Exception as e:
+                    print(f"Failed to compute/update nframes for {final_path}: {e}")
+
     return
 
 def gks2p_segment(ds, basepath, pipeline='orig', iplaneList=None):

@@ -15,6 +15,11 @@ setup(
     keywords='suite2p module-based gks2p',
     packages=['gks2p'],
     install_requires=['tifffile', 'natsort'],
+    entry_points={
+        'console_scripts': [
+            'gks2p-smooth = gks2p.suite2p_temporal_smoothing:main'
+        ]
+    },
     classifiers=[
         'Development Status :: 1 - Alpha',
         'Intended Audience :: Science/Research',

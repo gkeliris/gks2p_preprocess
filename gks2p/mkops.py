@@ -10,9 +10,20 @@ import os
 #import json
 import numpy as np
 import scipy.io
-import suite2p
-import scanreader
 import xml.etree.ElementTree as ET
+
+# Optional heavy dependencies: allow importing mkops even when suite2p or
+# scanreader are not installed. Functions that actually need them will
+# raise informative errors at runtime.
+try:
+    import suite2p
+except Exception:
+    suite2p = None
+
+try:
+    import scanreader
+except Exception:
+    scanreader = None
 
 def mkops(savepath0, dat, db={}, fastdisk=None):
     
