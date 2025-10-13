@@ -8,8 +8,19 @@ Created on Sun Jan 14 13:35:10 2024
 
 import pandas as pd
 import numpy as np
-import suite2p
-from ScanImageTiffReader import ScanImageTiffReader
+
+# Make heavy optional imports lazy so the module can be imported even when
+# suite2p or ScanImageTiffReader are not installed. Functions that need
+# them will raise an informative ImportError at runtime.
+try:
+    import suite2p
+except Exception:
+    suite2p = None
+
+try:
+    from ScanImageTiffReader import ScanImageTiffReader
+except Exception:
+    ScanImageTiffReader = None
 defaultCsvPath = '/mnt/NAS_DataStorage/Data_raw/Temperature_epilepsy/TEPI_datasets.csv'
 
 def datasetQuery(csvFilePath=defaultCsvPath,
@@ -81,6 +92,8 @@ def getOneSesPath(cohort, day, mouseID, sesX, experiment):
     return ds
 
 def checkDatasets(ds_path):
+    if suite2p is None or ScanImageTiffReader is None:
+        raise ImportError("checkDatasets requires 'suite2p' and 'ScanImageTiffReader'. Install them in your environment to use this function.")
     fs, dif = suite2p.io.utils.list_files(ds_path,False,["*.tif","*.tiff"])
     print('\n\nCHECKING DATA INTEGRITY:')
     out = {'PASS':[],'PASS_ind':[],'FAIL':[],'FAIL_ind':[],'EXCEPTION':[]}
@@ -100,6 +113,8 @@ def checkDatasets(ds_path):
     return out
 
 def checkTifFile(ds_path, fileIndex):
+    if suite2p is None or ScanImageTiffReader is None:
+        raise ImportError("checkTifFile requires 'suite2p' and 'ScanImageTiffReader'. Install them in your environment to use this function.")
     fs, dif = suite2p.io.utils.list_files(ds_path,False,["*.tif","*.tiff"])
     print('\n\nCHECKING DATA INTEGRITY:')
     try:
@@ -112,6 +127,8 @@ def checkTifFile(ds_path, fileIndex):
     return out
 
 def getTimeStamps(ds_path, fileIndex):
+    if suite2p is None or ScanImageTiffReader is None:
+        raise ImportError("getTimeStamps requires 'suite2p' and 'ScanImageTiffReader'. Install them in your environment to use this function.")
     fs, dif = suite2p.io.utils.list_files(ds_path,False,["*.tif","*.tiff"])
     reader = ScanImageTiffReader(fs[fileIndex])
     stack = reader.data()
