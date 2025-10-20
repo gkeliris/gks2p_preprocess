@@ -239,6 +239,95 @@ def gks2p_register(ds, basepath, pipeline='orig', iplaneList=None):
             else:
                 opsPlane=np.load(opsstr,allow_pickle=True).item()
             opsPlane = {**opsPlane, **ops}
+
+            # Ensure badframes (frames to ignore) are present in opsPlane so
+            # suite2p detection/registration sees them. Support multiple
+            # conventions: 'badframes' key, 'bad_frames' key, or a
+            # bad_frames.npy file saved in the raw data folder.
+            bf = opsPlane.get('badframes', None)
+            src = None
+            if bf is None:
+                bf = opsPlane.get('bad_frames', None)
+                if bf is not None:
+                    src = 'opsPlane["bad_frames"]'
+            if bf is None:
+                # also allow dataset-level ops to carry the key
+                bf = ops.get('badframes', None)
+                if bf is not None:
+                    src = 'dataset ops["badframes"]'
+            if bf is None:
+                bf = ops.get('bad_frames', None)
+                if bf is not None:
+                    src = 'dataset ops["bad_frames"]'
+            if bf is None:
+                # try to locate a bad_frames.npy in the raw data folder
+                rawpath = None
+                dp = ops.get('data_path', None)
+                if isinstance(dp, (list, tuple)) and dp:
+                    rawpath = dp[0]
+                elif isinstance(dp, str) and dp:
+                    rawpath = dp
+                elif ops.get('raw_file'):
+                    rf = ops.get('raw_file')
+                    if os.path.isabs(rf):
+                        rawpath = os.path.dirname(rf)
+                    else:
+                        if isinstance(dp, (list, tuple)) and dp:
+                            rawpath = dp[0]
+                        elif isinstance(dp, str) and dp:
+                            rawpath = dp
+                elif hasattr(dat, 'rawPath'):
+                    rawpath = getattr(dat, 'rawPath')
+
+                if rawpath is not None:
+                    # Log the resolved rawpath for debugging
+                    print(f"gks2p_register: resolved rawpath for dataset -> {rawpath}")
+                    for fname in ('bad_frames.npy', 'badframes.npy'):
+                        p = os.path.join(rawpath, fname)
+                        if os.path.isfile(p):
+                            try:
+                                arr = np.load(p)
+                                opsPlane['badframes'] = np.asarray(arr)
+                                bf = opsPlane['badframes']
+                                src = f'file:{p}'
+                                print(f"Loaded badframes from {p}")
+                                break
+                            except Exception as ex:
+                                print(f"gks2p_register: failed loading {p}: {ex}")
+                                pass
+                else:
+                    print("gks2p_register: no rawpath resolved to search for bad_frames.npy")
+
+            if bf is not None:
+                # normalize into opsPlane under the canonical key
+                opsPlane['badframes'] = bf
+                if src is None:
+                    src = 'opsPlane["badframes"]'
+                try:
+                    arr = np.asarray(bf)
+                    n_entries = arr.size
+                    ones = None
+                    # If boolean mask, count True values
+                    if arr.dtype == bool:
+                        ones = int(arr.sum())
+                    else:
+                        # If integer mask but only contains 0/1 values, count ones
+                        try:
+                            unique = np.unique(arr)
+                            if unique.size > 0 and np.all(np.isin(unique, [0, 1])):
+                                ones = int(np.count_nonzero(arr == 1))
+                        except Exception:
+                            ones = None
+
+                    if ones is not None:
+                        print(f"gks2p_register: using badframes from {src} (entries={n_entries}, ones={ones})")
+                    else:
+                        print(f"gks2p_register: using badframes from {src} (entries={n_entries})")
+                except Exception:
+                    print(f"gks2p_register: using badframes from {src}")
+            else:
+                print("gks2p_register: no badframes found for this dataset/plane")
+
             Ly=opsPlane['Ly']
             Lx=opsPlane['Lx']
 
@@ -657,17 +746,79 @@ def gks2p_segment(ds, basepath, pipeline='orig', iplaneList=None):
             Ly=opsPlane['Ly']
             Lx=opsPlane['Lx']
 
-            # Use default classification file provided by suite2p 
+            # Use default classification file provided by suite2p
             classfile = suite2p.classification.builtin_classfile
             #np.load(classfile, allow_pickle=True)[()]
+
+            # Choose the correct registered binary to segment based on channel selection:
+            # - If functional channel is 2 and we did NOT switch channels during registration,
+            #   prefer the chan2 registered binary (data_chan2*.bin).
+            # - Otherwise use the main registered binary (data*.bin).
+            # If the preferred file does not exist, fall back to the main registered binary.
+            reg_file = 'data.bin' if pipeline == 'orig' else f"data_{pipeline}.bin"
+            reg_file2 = 'data_chan2.bin' if pipeline == 'orig' else f"data_chan2_{pipeline}.bin"
+
+            functional_chan = opsPlane.get('functional_chan', ops.get('functional_chan', 1))
+            switched = bool(opsPlane.get('switch_chan', ops.get('switch_chan', 0)))
+
+            preferred = reg_file
+            if functional_chan == 2 and not switched:
+                preferred = reg_file2
+
+            plane_dir = os.path.join(opsPlane['fast_disk'], 'suite2p', f'plane{iplane}')
+            preferred_path = os.path.join(plane_dir, preferred)
+            main_path = os.path.join(plane_dir, reg_file)
+
+            chosen_path = preferred_path if os.path.isfile(preferred_path) else main_path
+            if not os.path.isfile(chosen_path):
+                raise FileNotFoundError(f"Registered binary not found for plane {iplane}: "
+                                        f"tried {preferred_path} and {main_path}")
+            if preferred_path != chosen_path:
+                print(f"gks2p_segment: preferred {preferred} not found; using {os.path.basename(chosen_path)}")
+            else:
+                print(f"gks2p_segment: using {os.path.basename(chosen_path)} for segmentation (functional_chan={functional_chan}, switched={switched})")
+
+            f_reg = suite2p.io.BinaryFile(Ly=Ly, Lx=Lx, filename=chosen_path)
             
-            f_reg = suite2p.io.BinaryFile(Ly=Ly, Lx=Lx, 
-                    filename=os.path.join(opsPlane['fast_disk'],'suite2p', 
-                                      'plane' + str(iplane), 'data.bin'))
             
-            
-            opsPlane, stat = suite2p.detection_wrapper(f_reg=f_reg, 
-                                            ops=opsPlane, classfile=classfile)
+            # Run detection; if no ROIs are found, retry once with relaxed params
+            try:
+                opsPlane, stat = suite2p.detection_wrapper(
+                    f_reg=f_reg, ops=opsPlane, classfile=classfile
+                )
+            except ValueError as e:
+                msg = str(e)
+                if "no ROIs were found" in msg:
+                    print("gks2p_segment: detection found no ROIs; relaxing parameters and retrying once...")
+                    # Relax a couple of key parameters
+                    orig_scale = opsPlane.get('spatial_scale', 0)
+                    orig_thresh = opsPlane.get('threshold_scaling', 1.0)
+                    # If scale is 0 (auto), try 1; otherwise bump by +1 (cap at 3 to avoid oversmoothing)
+                    try:
+                        scale_int = int(orig_scale)
+                    except Exception:
+                        scale_int = 0
+                    if scale_int == 0:
+                        new_scale = 1
+                    else:
+                        new_scale = min(scale_int + 1, 3)
+                    opsPlane['spatial_scale'] = new_scale
+
+                    # Make thresholds less strict (lower is less strict)
+                    try:
+                        orig_thresh_f = float(orig_thresh)
+                    except Exception:
+                        orig_thresh_f = 1.0
+                    opsPlane['threshold_scaling'] = min(orig_thresh_f, 0.4)
+                    print(f"gks2p_segment: spatial_scale {orig_scale} -> {opsPlane['spatial_scale']}, "
+                          f"threshold_scaling {orig_thresh} -> {opsPlane['threshold_scaling']}")
+                    # Retry once
+                    opsPlane, stat = suite2p.detection_wrapper(
+                        f_reg=f_reg, ops=opsPlane, classfile=classfile
+                    )
+                else:
+                    # Different ValueError; re-raise
+                    raise
             
             np.save(opsstr,opsPlane)
             np.save(os.path.join(pathstr,'stat.npy'),stat)

@@ -1,0 +1,20 @@
+{
+  // Reduce background load from search and file watching
+  "search.exclude": {
+    "**/s2p_binaries/**": true,
+    "**/suite2p_*/**": true,
+    "**/__pycache__/**": true,
+    "**/.git/**": true
+  },
+  "files.watcherExclude": {
+    "**/s2p_binaries/**": true,
+    "**/suite2p_*/**": true
+  },
+
+  // Pylance: avoid full workspace indexing for large trees
+  "python.analysis.indexing": false,
+
+  // Notebooks: keep output rendering light
+  "notebook.output.textLineLimit": 500,
+  "notebook.cellToolbarVisibility": "hover"
+}
