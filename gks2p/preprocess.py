@@ -13,7 +13,7 @@ import shutil
 import os
 
 # Import helpers from mkops; also import tifffile for compatibility with some readers
-from gks2p.mkops import mkops, generate_ops_from_metadata, parse_bruker_xml
+from gks2p.mkops import mkops, generate_ops_from_metadata, generate_ops_from_metadata2, parse_bruker_xml
 import tifffile
 from typing import Optional, Dict
 
@@ -91,6 +91,28 @@ def gks2p_makeOps_bruker(ds, basepath, db={}, fastbase=None):
         try:
             ops = generate_ops_from_metadata(gks2p_path(ds.iloc[d],basepath), ds.iloc[d], db, 
                             fastdisk=gks2p_path(ds.iloc[d],fastbase,'fast_disk'))
+        except Exception as error:
+            # handle the exception
+            print('\n****** -> PROBLEM WITH THIS DATASET ****\n')
+            print("An exception occurred:", type(error).__name__, "-", error)
+    return ops
+
+
+def gks2p_makeOps_bruker_multifile(ds, basepath, db={}, fastbase=None):
+    """Compatibility helper: same as `gks2p_makeOps_bruker` but calls the
+    multifile-aware generator `generate_ops_from_metadata2`.
+
+    This mirrors older code paths and is provided for notebooks/scripts that
+    expect the `_multifile` helper to exist.
+    """
+    for d in range(0, len(ds)):
+        print('\n\nPROCESSING:')
+        print(ds.iloc[d])
+        try:
+            ops = generate_ops_from_metadata2(
+                gks2p_path(ds.iloc[d], basepath), ds.iloc[d], db,
+                fastdisk=gks2p_path(ds.iloc[d], fastbase, 'fast_disk')
+            )
         except Exception as error:
             # handle the exception
             print('\n****** -> PROBLEM WITH THIS DATASET ****\n')
